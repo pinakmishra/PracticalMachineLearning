@@ -1,0 +1,79 @@
+---
+title: "PracticalMachineLearning"
+author: "pinak mishra"
+date: "Monday, September 22, 2014"
+output: html_document
+---
+
+## Introduction
+The project Practical Machine Learning write up is one of the most important and most awaited proejct of DataScience.
+Here I have tried to put all my knowldges from past courses of Data Science SPecilization.
+I have used explicitly RStidio to complete my work.
+
+## Data Collection
+The data for the analysis of this project i have downloaded from [here](http://groupware.les.inf.puc-rio.br/har) which contains the smart phone data of 19,633 observation in training and 20 observation in test. I have throughly studied the observation with different initial plot techniques and also tried to figuredout the relation betweens the variable and finally applied random forest technique to do some predictions.
+
+## Methods Used
+Initial steps involved splitting of data into 90% and 10% as training and test version of data respectively.
+Which will help us in applying the model in the training and then do the CV on the test version
+Used seeding for keeping the same randomness for every iteration so that there shoudl not be much overfitting.
+```{r}
+set.seed(614)
+library(lattice); library(ggplot2); library(caret)
+pml.training <- read.csv("C:/Users/pinakm7/PracticalMachineLearning/pml-training.csv")
+inTrain <- createDataPartition(y=pml.training$classe, p=0.9, list=FALSE)
+training <- pml.training[inTrain,]
+testing <- pml.training[-inTrain,]
+```
+Note: To run this code, you have to point to the training set after downloading the file from the mentioned link and put it inside the desired directory from where you want to read it.90% data I have taken from training sample on which I will prepare my model and rest 10% data we kept for CV(Cross validation) of the model.
+I have chosen simple cross-validation rather than using something like K-fold via the `cv.folds` option to cut down on execution time, which was already quite lengthy.  Next, I implement a Stochastic Gradient Boosting Machine(GBM) algorithm via the `gbm` package.
+```{r}
+ptm <- proc.time()
+modFit <- train(classe ~ user_name + pitch_arm + yaw_arm + roll_arm + roll_belt + pitch_belt + yaw_belt + gyros_belt_x + gyros_belt_y + gyros_belt_z + accel_belt_x + accel_belt_y + accel_belt_z + magnet_belt_x + magnet_belt_y + magnet_belt_z + gyros_arm_x + gyros_arm_y + gyros_arm_z + accel_arm_x + accel_arm_y + accel_arm_z + magnet_arm_x + magnet_arm_y + magnet_arm_z + roll_dumbbell + pitch_dumbbell + yaw_dumbbell, method="gbm", data=training, verbose=FALSE)
+proc.time() - ptm
+```
+To capture the execution time I've used `ptm` and `proc.time()`.  
+My Dell quad core cpu took around 24 minutes to apply this model.
+```{r}
+print(modFit)
+predictTr <- predict(modFit,training)
+table(predictTr, training$classe)
+```
+This model is smart enough to correctly classify 93.6 percent of the observations in the training sample using 150 trees.  
+The "roll_belt"" and "yaw_belt"" features seems to be the mostinfluencecial features by now.  
+Now, I tried  doing the summary of the model with 150 trees.
+```{r}
+summary(modFit,n.trees=150)
+```
+A plot illustrating the top two features colored by outcome demonstrates their relative importance.  
+```{r}
+qplot(roll_belt, yaw_belt,colour=classe,data=training)
+```
+Even though these are the top features, they're still not great predictors in their own right.  Nonetheless, you can see some bunching in this simple plot.  This confirms the choice of a boosting algorithm as a good choice given the large set of relatively weak predictors.  
+This next plot further illustates the improved performance gained by using boosting iterations.
+```{r}
+ggplot(modFit)
+```
+Next, I check the performance for the 10% CV samples which i have seprated initially form the data set and estimate the sub sample performance.
+```{r}
+predictTe <- predict(modFit,testing)
+table(predictTe, testing$classe)
+```
+The algorithm actually peforms only does slightly worse on the testing subset than it did on the full training set, correctly classifying 93.4 percent of the observations.
+## Prediction on the Test Set for CV calculations
+Finally, I used the model to run on the test set for doing the simple CV.
+I tried writing the result file using the  `pml_write_files()` function from the course Coursera site, and stored the submission to different files.  
+```{r}
+pml.testing <- read.csv("C:/Users/pinakm7/PracticalMachineLearning/pml-testing.csv")
+answers <- as.character(predict(modFit, pml.testing))
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
+Finally after submitting the answers it seems the algorith predicted the outcomes correctly which I need.
+it turns out that the algorithm correctly predicted the outcome for 20/20 observations further confirming its strong out-of-sample classification accuracy.  
